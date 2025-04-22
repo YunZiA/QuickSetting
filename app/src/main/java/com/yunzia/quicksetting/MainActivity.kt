@@ -3,15 +3,26 @@ package com.yunzia.quicksetting
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Spinner
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
@@ -19,9 +30,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.BlendModeColorFilter
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -34,10 +50,17 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
+import top.yukonga.miuix.kmp.extra.CheckboxLocation
+import top.yukonga.miuix.kmp.extra.SpinnerEntry
 import top.yukonga.miuix.kmp.extra.SuperArrow
+import top.yukonga.miuix.kmp.extra.SuperCheckbox
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.extra.SuperDropdown
+import top.yukonga.miuix.kmp.extra.SuperSpinner
 import top.yukonga.miuix.kmp.extra.SuperSwitch
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.icons.basic.Check
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.dismissDialog
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 
@@ -59,9 +82,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun App() {
 
-    val initDialog = remember { mutableStateOf(true) }
-
-    val user = remember { mutableIntStateOf(if (Helpers.isRoot()) 1 else 0) }
+    val workModeList = listOf("基础","adb", "root")
+    val user = remember { mutableIntStateOf(if (Helpers.isRoot()) 2 else 0) }
+    val initDialog = remember { mutableStateOf(user.intValue == 0) }
 
     val scrollBehavior = MiuixScrollBehavior(rememberTopAppBarState())
 
@@ -83,21 +106,25 @@ fun App() {
 
     SuperDialog(
         show = initDialog,
-        title = "设置模式",
+        title = "工作模式",
         insideMargin = DpSize(0.dp, 24.dp),
         onDismissRequest={
             initDialog.value = false
         }
     ) {
-        SuperDropdown(
-            title = "设置权限",
-            insideMargin = PaddingValues(24.dp,16.dp),
-            items = listOf("adb", "root"),
-            selectedIndex = user.intValue,
-            onSelectedIndexChange = {
-                user.intValue = it
-            }
-        )
+        workModeList.forEachIndexed { index,mode->
+
+            SpinnerItemImpl(
+                title = mode,
+                index = index,
+                isSelected = user.intValue == index,
+                onSelectedIndexChange = {_->
+                    user.intValue = index
+                    dismissDialog(initDialog)
+                }
+            )
+
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -128,6 +155,19 @@ fun App() {
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             contentPadding = innerPadding,
         ) {
+            item {
+                Card(
+                    modifier= Modifier.padding(horizontal = 12.dp).padding(top = 16.dp)
+                ) {
+                    SuperArrow(
+                        title = "当前工作模式",
+                        rightText = workModeList.get(user.intValue),
+                        onClick = {
+                            initDialog.value = true
+                        }
+                    )
+                }
+            }
             titleItem("快捷开关"){
                 val developerOptions = remember { mutableStateOf(checkDeveloperOptionsEnabled(context)) }
                 SuperSwitch(
@@ -180,7 +220,6 @@ fun App() {
 
             }
             titleItem("快捷跳转") {
-
                 SuperArrow(
                     title = "开发者选项",
                     onClick = {
@@ -191,6 +230,19 @@ fun App() {
                 SuperArrow(
                     title = "无线调试",
                     onClick = {
+                        val intent = Intent()
+                        val subSettings = ComponentName("com.android.settings", "com.android.settings.SubSettings")
+                        intent.setComponent(subSettings)
+                        intent.putExtra(":settings:source_metrics",39)
+                        intent.putExtra(":settings:show_fragment","com.android.settings.development.WirelessDebuggingFragment")
+                        intent.putExtra(":settings:show_fragment_title","wcnm无线调试")
+                        context.startActivity(intent)
+                    }
+                )
+                SuperArrow(
+                    title = "使用二维码配对设备",
+                    onClick = {
+                        "com.android.settings.development.AdbQrCodePreferenceController"
                         val intent = Intent()
                         val subSettings = ComponentName("com.android.settings", "com.android.settings.SubSettings")
                         intent.setComponent(subSettings)
@@ -221,19 +273,81 @@ fun App() {
     }
 }
 
+@Composable
+fun SpinnerItemImpl(
+    title: String,
+    isSelected: Boolean,
+    index: Int,
+    onSelectedIndexChange: (Int) -> Unit,
+) {
+    val additionalTopPadding =  12f.dp
+    val additionalBottomPadding =  12f.dp
+    val titleColor: Color
+    val summaryColor: Color
+    val selectColor: Color
+    val backgroundColor: Color
+    if (isSelected) {
+        titleColor = MiuixTheme.colorScheme.onTertiaryContainer
+        summaryColor = MiuixTheme.colorScheme.onTertiaryContainer
+        selectColor = MiuixTheme.colorScheme.onTertiaryContainer
+        backgroundColor = MiuixTheme.colorScheme.tertiaryContainer
+    } else {
+        titleColor = MiuixTheme.colorScheme.onSurface
+        summaryColor = MiuixTheme.colorScheme.onSurfaceVariantSummary
+        selectColor = Color.Transparent
+        backgroundColor = MiuixTheme.colorScheme.surface
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier
+            .heightIn(min = 56.dp)
+            .widthIn(min = 200.dp)
+            .fillMaxWidth()
+            .clickable {
+                onSelectedIndexChange(index)
+            }
+            .background(backgroundColor)
+            .padding(horizontal = 28.dp)
+            .padding(top = additionalTopPadding, bottom = additionalBottomPadding)
+    ) {
+        Row(
+            modifier = Modifier,
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start
+        ) {
+
+            Column {
+                Text(
+                    text = title,
+                    fontSize = MiuixTheme.textStyles.headline1.fontSize,
+                    fontWeight = FontWeight.Medium,
+                    color = titleColor
+                )
+            }
+        }
+        Image(
+            modifier = Modifier.padding(start = 12.dp).size(20.dp),
+            imageVector = MiuixIcons.Basic.Check,
+            colorFilter = BlendModeColorFilter(selectColor, BlendMode.SrcIn),
+            contentDescription = null,
+        )
+    }
+}
+
 fun LazyListScope.titleItem(
     key: String,
     contentType: Any? = null,
     content: @Composable LazyItemScope.() -> Unit
 ){
     item(key){
+        Spacer(Modifier.height(6.dp))
         SmallTitle(key)
         Card(
             modifier= Modifier.padding(horizontal = 12.dp)
         ){
             content()
         }
-        Spacer(Modifier.height(6.dp))
     }
 }
 
