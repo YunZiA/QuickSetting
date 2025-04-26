@@ -19,3 +19,11 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+#保持泛型
+-keepattributes Signature
+
+#保持反射不被混淆
+-keepattributes EnclosingMethod
+
+-keep class com.yunzia.quicksetting.** { *; }

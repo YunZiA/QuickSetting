@@ -18,15 +18,51 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    val keystoreFile = System.getenv("KEYSTORE_PATH")
+    signingConfigs {
+        if (keystoreFile != null) {
+            create("ci") {
+                storeFile = file(keystoreFile)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+                enableV4Signing = true
+            }
+
+        }else{
+            create("default"){
+                enableV4Signing = true
+
+            }
+        }
+
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName(if (keystoreFile != null) "ci" else "default")
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
     }
+
+    applicationVariants.all {
+        outputs.all {
+            if (this is com.android.build.gradle.internal.api.ApkVariantOutputImpl) {
+                val config = project.android.defaultConfig
+                val appName = "QuickSetting"
+                val versionName = "v"+config.versionName
+                val buildType = this.name
+
+                this.outputFileName = "${appName}_${versionName}_${buildType}.apk"
+            }
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
