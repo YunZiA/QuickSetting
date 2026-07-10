@@ -1,10 +1,39 @@
+import com.android.build.api.dsl.ApplicationExtension
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.util.Properties
+import kotlin.apply
+import kotlin.collections.set
+
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
-android {
+val versionInfo: Pair<Int, String> by lazy {
+    val versionFile = file("version.properties")
+    val props = Properties().apply { load(FileInputStream(versionFile)) }
+    if (versionFile.canRead()) {
+        var versionCode = props.getProperty("VERSION_CODE", "1").toInt()
+        val versionName = props.getProperty("VERSION_NAME", "1.0")
+        val runTasks = gradle.startParameter.taskNames
+        System.out.println("> Configure project :runTasks = $runTasks")
+        if (":app:assembleDebug" !in runTasks && "" !in runTasks){
+            versionCode += 1
+            props["VERSION_CODE"] = versionCode.toString()
+            props["VERSION_NAME"] = versionName
+            FileOutputStream(versionFile).use { output ->
+                props.store(output, null)
+            }
+        }
+        System.out.println("> Configure project :{versionCode = $versionCode, versionName = $versionName}")
+        Pair(versionCode, versionName)
+    } else {
+        throw GradleException("Could not find version.properties!")
+    }
+}
+
+configure<ApplicationExtension> {
     namespace = "com.yunzia.quicksetting"
     compileSdk = 36
 
@@ -12,8 +41,8 @@ android {
         applicationId = "com.yunzia.quicksetting"
         minSdk = 33
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0"
+        versionCode = versionInfo.first
+        versionName = versionInfo.second
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -50,29 +79,19 @@ android {
         }
     }
 
-    applicationVariants.all {
-        outputs.all {
-            if (this is com.android.build.gradle.internal.api.ApkVariantOutputImpl) {
-                val config = project.android.defaultConfig
-                val appName = "QuickSetting"
-                val versionName = "v"+config.versionName
-                val buildType = this.name
-
-                this.outputFileName = "${appName}_${versionName}_${buildType}.apk"
-            }
-        }
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
+
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+}
+
+base {
+    archivesName.set("QuickSetting${versionInfo.second}")
 }
 
 dependencies {

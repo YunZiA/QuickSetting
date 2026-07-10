@@ -7,23 +7,15 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.wifi.WifiManager
 import android.os.Bundle
-import android.util.Log
-import android.widget.Spinner
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -34,13 +26,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -48,28 +38,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.BlendModeColorFilter
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.toSize
 import com.yunzia.quicksetting.Helpers.sh
 import com.yunzia.quicksetting.ui.theme.WIFIEnhanceTheme
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -80,21 +64,13 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
 import top.yukonga.miuix.kmp.basic.rememberTopAppBarState
-import top.yukonga.miuix.kmp.extra.CheckboxLocation
-import top.yukonga.miuix.kmp.extra.SpinnerEntry
 import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.SuperCheckbox
 import top.yukonga.miuix.kmp.extra.SuperDialog
-import top.yukonga.miuix.kmp.extra.SuperDropdown
-import top.yukonga.miuix.kmp.extra.SuperSpinner
 import top.yukonga.miuix.kmp.extra.SuperSwitch
+import top.yukonga.miuix.kmp.extra.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.basic.Check
+import top.yukonga.miuix.kmp.icon.basic.Check
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
-import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.dismissDialog
-import top.yukonga.miuix.kmp.utils.SmoothRoundedCornerShape
-import top.yukonga.miuix.kmp.utils.getWindowSize
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import kotlin.math.log
 
@@ -125,6 +101,7 @@ fun App() {
     val update = remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    var isRefreshing by rememberSaveable { mutableStateOf(false) }
     val pullToRefreshState = rememberPullToRefreshState()
 
     val developerOptions = remember { mutableStateOf(checkDeveloperOptionsEnabled(context)) }
@@ -133,13 +110,16 @@ fun App() {
     val usbDebuggingI = remember { mutableStateOf(isUsbDebuggingIEnabled()) }
 
 
-    LaunchedEffect(pullToRefreshState.isRefreshing) {
-        if (pullToRefreshState.isRefreshing) {
+    LaunchedEffect(isRefreshing) {
+        if (isRefreshing) {
             //isRefreshing = true
             delay(100)
-            pullToRefreshState.completeRefreshing {
-                //isRefreshing = false
-            }
+
+            developerOptions.value  = checkDeveloperOptionsEnabled(context)
+            usbDebugging.value  = isUsbDebuggingEnabled(context)
+            wirelessDebugging.value  = isWirelessDebuggingEnabled(context)
+            usbDebuggingI.value  = isUsbDebuggingIEnabled()
+            isRefreshing = false
         }
     }
 
@@ -193,7 +173,7 @@ fun App() {
         }
     }
 
-    SuperDialog(
+    WindowDialog(
         show = initDialog,
         title = "工作模式",
         insideMargin = DpSize(0.dp, 24.dp),
@@ -210,7 +190,7 @@ fun App() {
                 isSelected = user.intValue == index,
                 onSelectedIndexChange = {_->
                     user.intValue = index
-                    dismissDialog(initDialog)
+                    initDialog.value = false
                 }
             )
 
@@ -223,7 +203,7 @@ fun App() {
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
             onClick = {
-                dismissDialog(initDialog)
+                initDialog.value = false
             }
         ) {
             Text(text = "关闭")
@@ -241,19 +221,20 @@ fun App() {
     ) { innerPadding ->
 
         PullToRefresh(
+            isRefreshing = isRefreshing,
+            onRefresh = { isRefreshing = true },
             pullToRefreshState = pullToRefreshState,
-            contentPadding = PaddingValues(top = innerPadding.calculateTopPadding()),
-            onRefresh = {
-                developerOptions.value  = checkDeveloperOptionsEnabled(context)
-                usbDebugging.value  = isUsbDebuggingEnabled(context)
-                wirelessDebugging.value  = isWirelessDebuggingEnabled(context)
-                usbDebuggingI.value  = isUsbDebuggingIEnabled()
-            }
+            topAppBarScrollBehavior = scrollBehavior,
+            contentPadding = PaddingValues(
+                top = innerPadding.calculateTopPadding() + 12.dp,
+                bottom = 0.dp,
+            ),
         ) {
+
 
             LazyColumn (
                 modifier = Modifier
-                    .height(getWindowSize().height.dp)
+                    .fillMaxSize()
                     .overScrollVertical()
                     .nestedScroll(scrollBehavior.nestedScrollConnection),
                 contentPadding = PaddingValues(top = innerPadding.calculateTopPadding())
@@ -266,7 +247,9 @@ fun App() {
                     ) {
                         SuperArrow(
                             title = "当前工作模式",
-                            rightText = workModeList.get(user.intValue),
+                            endActions = {
+                                Text(workModeList[user.intValue])
+                            },
                             onClick = {
                                 initDialog.value = true
                             }
